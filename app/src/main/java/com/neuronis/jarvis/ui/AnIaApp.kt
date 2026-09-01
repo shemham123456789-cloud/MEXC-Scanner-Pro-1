@@ -109,13 +109,161 @@ fun AnIaApp(vm: NeuronisViewModel = viewModel()) {
     }
 }
 
-private fun DrawScope.drawAdvancedChart(slice: List<Candle>, a: AnalysisSnapshot, zonesOn: Boolean) {
+private fun DrawScope.drawAdvancedChart(
+    slice: List<Candle>,
+    a: AnalysisSnapshot,
+    zonesOn: Boolean
+) {
     if (slice.isEmpty()) return
-    val prices = mutableListOf<Double>(); slice.forEach { prices += it.high; prices += it.low }; prices += listOf(a.entry, a.stop, a.tp1, a.tp2, a.vwap); val hi = prices.maxOrNull() ?: 1.0; val lo = prices.minOrNull() ?: 0.0; val range = max(hi - lo, 1e-9); fun y(v: Double) = size.height - ((v - lo) / range * size.height).toFloat(); for (i in 1..6) drawLine(GRID, Offset(0f, size.height * i / 7f), Offset(size.width, size.height * i / 7f), 1f)
-    if (zonesOn) a.zones.take(10).forEach { z -> val top = y(z.high); val bottom = y(z.low); if (bottom >= -60 && top <= size.height + 60) drawRect(zoneColor(z.type).copy(.08f), Offset(0f, min(top, bottom)), Size(size.width, max(2f, abs(bottom - top)))) }
-    val w = size.width / slice.size; slice.forEachIndexed { i, b -> val x = i * w + w / 2; val c = if (b.close >= b.open) GREEN else RED; drawLine(c, Offset(x, y(b.high)), Offset(x, y(b.low)), 1.4f); drawRect(c, Offset(x - w * .28f, y(max(b.open, b.close))), Size(max(2f, w * .56f), max(2f, abs(y(b.open) - y(b.close))))) }
-    listOf("ENTRY" to a.entry, "SL" to a.stop, "TP1" to a.tp1, "TP2" to a.tp2, "VWAP" to a.vwap).forEach { (label, value) -> if (value in lo..hi) { val yy = y(value); val c = when (label) { "SL" -> RED; "TP1" -> GREEN; "TP2" -> GOLD; "VWAP" -> CYAN; else -> TEXT }; drawLine(c.copy(.7f), Offset(0f, yy), Offset(size.width, yy), if (label == "ENTRY") 2f else 1f) } }
-    if (a.direction != SignalDirection.FLAT) { val x = size.width * .82f; val yy = y(a.entry); val c = signalColor(a.direction); drawCircle(c, 8f, Offset(x, yy)); drawLine(c, Offset(x, yy), Offset(x, if (a.direction == SignalDirection.LONG) yy - 46f else yy + 46f), 2.2f) }
+
+    val prices = mutableListOf<Double>()
+
+    slice.forEach { candle ->
+        prices.add(candle.high)
+        prices.add(candle.low)
+    }
+
+    prices.addAll(
+        listOf(
+            a.entry,
+            a.stop,
+            a.tp1,
+            a.tp2,
+            a.vwap
+        )
+    )
+
+    val hi = prices.maxOrNull() ?: 1.0
+    val lo = prices.minOrNull() ?: 0.0
+    val range = max(hi - lo, 1e-9)
+
+    fun y(value: Double): Float {
+        return size.height -
+            ((value - lo) / range * size.height).toFloat()
+    }
+
+    for (i in 1..6) {
+        drawLine(
+            color = GRID,
+            start = Offset(
+                0f,
+                size.height * i / 7f
+            ),
+            end = Offset(
+                size.width,
+                size.height * i / 7f
+            ),
+            strokeWidth = 1f
+        )
+    }
+
+    if (zonesOn) {
+        a.zones
+            .take(10)
+            .forEach { zone ->
+                val top = y(zone.high)
+                val bottom = y(zone.low)
+
+                if (bottom >= -60f && top <= size.height + 60f) {
+                    drawRect(
+                        color = zoneColor(zone.type).copy(alpha = 0.08f),
+                        topLeft = Offset(
+                            0f,
+                            min(top, bottom)
+                        ),
+                        size = Size(
+                            size.width,
+                            max(2f, abs(bottom - top))
+                        )
+                    )
+                }
+            }
+    }
+
+    val candleWidth = size.width / slice.size.toFloat()
+
+    slice.forEachIndexed { index, candle ->
+        val x = index * candleWidth + candleWidth / 2f
+        val candleColor =
+            if (candle.close >= candle.open) GREEN else RED
+
+        drawLine(
+            color = candleColor,
+            start = Offset(x, y(candle.high)),
+            end = Offset(x, y(candle.low)),
+            strokeWidth = 1.4f
+        )
+
+        val bodyTop = y(max(candle.open, candle.close))
+        val bodyBottom = y(min(candle.open, candle.close))
+
+        drawRect(
+            color = candleColor,
+            topLeft = Offset(
+                x - candleWidth * 0.28f,
+                bodyTop
+            ),
+            size = Size(
+                max(2f, candleWidth * 0.56f),
+                max(2f, abs(bodyBottom - bodyTop))
+            )
+        )
+    }
+
+    val levels = listOf(
+        "ENTRY" to a.entry,
+        "SL" to a.stop,
+        "TP1" to a.tp1,
+        "TP2" to a.tp2,
+        "VWAP" to a.vwap
+    )
+
+    levels.forEach { (label, value) ->
+        if (value in lo..hi) {
+            val yy = y(value)
+
+            val lineColor = when (label) {
+                "SL" -> RED
+                "TP1" -> GREEN
+                "TP2" -> GOLD
+                "VWAP" -> CYAN
+                else -> TEXT
+            }
+
+            drawLine(
+                color = lineColor.copy(alpha = 0.7f),
+                start = Offset(0f, yy),
+                end = Offset(size.width, yy),
+                strokeWidth = if (label == "ENTRY") 2f else 1f
+            )
+        }
+    }
+
+    if (a.direction != SignalDirection.FLAT) {
+        val x = size.width * 0.82f
+        val yy = y(a.entry)
+        val signal = signalColor(a.direction)
+
+        drawCircle(
+            color = signal,
+            radius = 8f,
+            center = Offset(x, yy)
+        )
+
+        drawLine(
+            color = signal,
+            start = Offset(x, yy),
+            end = Offset(
+                x,
+                if (a.direction == SignalDirection.LONG) {
+                    yy - 46f
+                } else {
+                    yy + 46f
+                }
+            ),
+            strokeWidth = 2.2f
+        )
+    }
 }
 
 @Composable private fun ScannerScreen(rows: List<ScannerSignal>, scan: () -> Unit, select: (String) -> Unit) {
